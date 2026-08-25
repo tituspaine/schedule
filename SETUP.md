@@ -4,7 +4,8 @@ This app is a static GitHub Pages scheduling site for haircut appointments. It u
 
 - **GitHub Pages** — free hosting
 - **Firebase Firestore** — free-tier shared persistence (prevents double-booking across all users/devices)
-- **EmailJS** — free-tier email delivery (no backend required)
+- **Firebase Cloud Functions** — serverless backend that sends transactional emails on booking events
+- **Nodemailer + SMTP** — email delivery inside the function (Gmail App Password or any SMTP provider)
 
 ---
 
@@ -14,7 +15,7 @@ Firebase Firestore stores appointments and prevents double-booking globally.
 
 ### Steps
 
-1. Go to [https://console.firebase.google.com/](https://console.firebase.google.com/) and create a **new project** (free Spark plan).
+1. Go to [https://console.firebase.google.com/](https://console.firebase.google.com/) and create a **new project** (free Spark plan is fine for Firestore; Cloud Functions require the **Blaze (pay-as-you-go)** plan — costs are negligible for personal use).
 2. In the project, click **Firestore Database** → **Create database** → choose **Production mode** → pick a region → click **Enable**.
 3. Go to **Project Settings** (gear icon) → **Your apps** → click **</>** (Web) → register the app → copy the `firebaseConfig` object.
 4. Open `index.html` and replace the placeholder values in the `firebaseConfig` block near the top of the `<script type="module">`:
@@ -32,109 +33,84 @@ const firebaseConfig = {
 
 ### Firestore Security Rules
 
-In the Firebase console, go to **Firestore → Rules** and paste the following to allow reads/writes from your GitHub Pages domain only:
+In the Firebase console, go to **Firestore → Rules** and paste the following:
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /appointments/{apptId} {
-      // Anyone can read and create appointments (needed for booking + management links)
       allow read: true;
-      // Allow create only if the document doesn't already exist (prevents double-booking)
       allow create: if !exists(/databases/$(database)/documents/appointments/$(apptId));
-      // Allow update only to cancel/reschedule (not replace full document)
       allow update: if request.resource.data.keys().hasOnly(['status', 'updatedAt'])
                     || request.resource.data.diff(resource.data).affectedKeys().hasOnly(
                          ['status','rescheduledFrom','updatedAt','date','slot']);
       allow delete: if false;
     }
+    // emailQueue is write-only from the browser; only Functions read/update it
+    match /emailQueue/{docId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
   }
 }
 ```
 
-> **Note:** These rules let anyone with the appointment ID manage their booking, which is intentional — management links are private per-user.
-
 ---
 
-## 2. EmailJS Setup (Email Notifications)
+## 2. Firebase Cloud Functions Setup (Email Notifications)
 
-EmailJS sends emails from the browser without a backend.
+The `functions/` directory contains a Node.js Cloud Function that watches the `emailQueue` collection and sends emails via SMTP whenever a new document is created there.
 
-### Steps
+### 2a. Install the Firebase CLI
 
-1. Go to [https://www.emailjs.com/](https://www.emailjs.com/) and create a free account.
-2. Click **Email Services** → **Add New Service** → connect your email provider (Gmail, Outlook, etc.).
-3. Note your **Service ID**.
-4. Go to **Email Templates** and create **three templates**:
-
-#### Template 1 — `template_confirm` (sent to client on booking)
-
-- **Template Name:** `template_confirm`
-- **To Email:** `{{to_email}}`
-- **Subject:** `Your Haircut Appointment Confirmed — {{appt_date}} at {{appt_slot}}`
-- **Body:**
-```
-Hi {{client_name}},
-
-Your appointment is confirmed!
-
-Date: {{appt_date}}
-Time: {{appt_slot}}
-People: {{num_people}}
-Phone: {{client_phone}}
-
-Need to cancel or reschedule? Use this link:
-{{manage_link}}
-
-See you soon!
-– Titus
+```bash
+npm install -g firebase-tools
+firebase login
 ```
 
-#### Template 2 — `template_notify` (sent to owner on new booking)
+### 2b. Install function dependencies
 
-- **Template Name:** `template_notify`
-- **To Email:** `{{to_email}}`
-- **Subject:** `New Appointment — {{client_name}} on {{appt_date}}`
-- **Body:**
-```
-New appointment booked:
-
-Client: {{client_name}}
-Date: {{appt_date}}
-Time: {{appt_slot}}
-People: {{num_people}}
-Phone: {{client_phone}}
-Email: {{client_email}}
-
-Manage link: {{manage_link}}
+```bash
+cd functions
+npm install
 ```
 
-#### Template 3 — `template_mgmt_update` (sent on cancel/reschedule)
+### 2c. Set SMTP environment variables
 
-- **Template Name:** `template_mgmt_update`
-- **To Email:** `{{to_email}}`
-- **Subject:** `Appointment {{action}} — {{client_name}}`
-- **Body:**
-```
-Appointment Update — {{action}}
+The function reads SMTP credentials from environment variables set with the Firebase CLI.
 
-Client: {{client_name}}
-Original: {{old_date}} at {{old_slot}}
-New: {{new_date}} {{new_slot}}
-Phone: {{client_phone}}
-Email: {{client_email}}
-People: {{num_people}}
+```bash
+firebase functions:config:set \
+  mail.host="smtp.gmail.com" \
+  mail.port="587" \
+  mail.user="your@gmail.com" \
+  mail.pass="your-app-password" \
+  mail.owner="contact@tituspaine.com"
 ```
 
-5. In `index.html`, replace the EmailJS config values near the top of the `<script>` block:
+> **Gmail tip:** Use a [Google App Password](https://myaccount.google.com/apppasswords) — not your regular Gmail password.  
+> **Other providers:** Set `mail.host` and `mail.port` for Outlook, Zoho, etc.
 
-```js
-const EMAILJS_PUBLIC_KEY  = "YOUR_EMAILJS_PUBLIC_KEY";
-const EMAILJS_SERVICE_ID  = "YOUR_SERVICE_ID";
+For the **2nd-gen Functions** (`firebase-functions` v5), secrets are stored differently — use Firebase Secret Manager:
+
+```bash
+firebase functions:secrets:set MAIL_HOST
+firebase functions:secrets:set MAIL_PORT
+firebase functions:secrets:set MAIL_USER
+firebase functions:secrets:set MAIL_PASS
+firebase functions:secrets:set MAIL_OWNER
 ```
 
-> Your **Public Key** is found in EmailJS → Account → API Keys.
+Then grant the function access to each secret in the Firebase console under **Functions → Secrets**.
+
+### 2d. Deploy the function
+
+```bash
+firebase deploy --only functions
+```
+
+After deployment, the `processEmailQueue` function will automatically trigger whenever a new document is added to `emailQueue` in Firestore and send the appropriate emails.
 
 ---
 
@@ -157,12 +133,24 @@ const SITE_URL = "https://tituspaine.github.io/schedule/";
 
 ---
 
-## Free Tier Limits
+## How Email Sending Works
+
+1. User books/cancels/reschedules an appointment in the browser.
+2. The browser writes a document to the `emailQueue` Firestore collection with status `"pending"`.
+3. The Firebase Cloud Function `processEmailQueue` is triggered automatically.
+4. The function sends emails via SMTP using Nodemailer.
+5. The function updates the document status to `"sent"` (or `"error"` on failure).
+
+No email credentials are ever in the browser or in `index.html`.
+
+---
+
+## Free Tier Notes
 
 | Service | Free Tier |
 |---------|-----------|
 | GitHub Pages | Unlimited static hosting |
 | Firebase Firestore | 50K reads/day, 20K writes/day, 1GB storage |
-| EmailJS | 200 emails/month |
+| Firebase Functions | 2M invocations/month, 400K GB-seconds compute (Blaze plan required but very low cost) |
+| Gmail SMTP | Free with App Password (500 emails/day limit) |
 
-For a personal scheduling app these limits are very generous.
