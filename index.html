@@ -5,14 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Schedule with Titus</title>
 
-  <!-- EmailJS -->
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
-      getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where
+      getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // ─── CONFIG — replace with your Firebase project values ─────────────────
@@ -33,7 +30,7 @@
 
     // Expose DB helpers on window so the non-module script can call them
     window._db = db;
-    window._fbModules = { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where };
+    window._fbModules = { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc };
   </script>
 
   <style>
@@ -441,18 +438,8 @@
 </div>
 
 <script>
-// ─── EmailJS Config — replace with your values ──────────────────────────────
-const EMAILJS_PUBLIC_KEY  = "REPLACE_WITH_YOUR_EMAILJS_PUBLIC_KEY";
-const EMAILJS_SERVICE_ID  = "REPLACE_WITH_YOUR_EMAILJS_SERVICE_ID";
-const EMAILJS_CONFIRM_TEMPLATE   = "template_confirm";
-const EMAILJS_NOTIFY_TEMPLATE    = "template_notify";
-const EMAILJS_MGMT_TEMPLATE      = "template_mgmt_update";
-// ────────────────────────────────────────────────────────────────────────────
-
 const OWNER_EMAIL = "contact@tituspaine.com";
 const SITE_URL    = "https://tituspaine.github.io/schedule/";
-
-emailjs.init(EMAILJS_PUBLIC_KEY);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function idb() { return window._db; }
@@ -565,18 +552,24 @@ async function rescheduleAppointment(apptId, newDate, newSlot) {
   return newDocId;
 }
 
-// ─── Email helpers ───────────────────────────────────────────────────────────
-async function sendEmail(templateId, params) {
-  return emailjs.send(EMAILJS_SERVICE_ID, templateId, params);
-}
-
+// ─── Email helpers (queued via Firestore — processed by Firebase Functions) ──
 function buildManagementLink(apptId) {
   return `${SITE_URL}?appt=${encodeURIComponent(apptId)}`;
 }
 
+async function queueEmail(type, payload) {
+  const { collection, addDoc } = fbm();
+  await addDoc(collection(idb(), "emailQueue"), {
+    type,
+    ...payload,
+    createdAt: new Date().toISOString(),
+    status: "pending"
+  });
+}
+
 async function sendConfirmationEmails(appt, apptId) {
   const link = buildManagementLink(apptId);
-  const sharedParams = {
+  await queueEmail("booking_confirmed", {
     client_name: appt.name,
     appt_date: appt.date,
     appt_slot: appt.slot,
@@ -584,19 +577,13 @@ async function sendConfirmationEmails(appt, apptId) {
     client_phone: appt.phone,
     client_email: appt.email,
     manage_link: link
-  };
-  // Send to client
-  await sendEmail(EMAILJS_CONFIRM_TEMPLATE, { ...sharedParams, to_email: appt.email, to_name: appt.name });
-  // Notify owner
-  await sendEmail(EMAILJS_NOTIFY_TEMPLATE, { ...sharedParams, to_email: OWNER_EMAIL, to_name: "Titus" });
+  });
 }
 
 async function sendMgmtUpdateEmail(appt, action, newDate, newSlot) {
-  const params = {
-    to_email: OWNER_EMAIL,
-    to_name: "Titus",
+  await queueEmail("booking_updated", {
+    action,
     client_name: appt.name,
-    action: action,
     old_date: appt.date,
     old_slot: appt.slot,
     new_date: newDate || "",
@@ -604,11 +591,7 @@ async function sendMgmtUpdateEmail(appt, action, newDate, newSlot) {
     client_phone: appt.phone,
     client_email: appt.email,
     num_people: appt.people
-  };
-  // Also notify the client
-  const clientParams = { ...params, to_email: appt.email, to_name: appt.name };
-  await sendEmail(EMAILJS_MGMT_TEMPLATE, params);
-  await sendEmail(EMAILJS_MGMT_TEMPLATE, clientParams);
+  });
 }
 
 // ─── Calendar State ──────────────────────────────────────────────────────────
