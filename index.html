@@ -4,823 +4,1063 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Schedule with Titus</title>
+
+  <!-- EmailJS -->
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // ─── CONFIG — replace with your Firebase project values ─────────────────
+    const firebaseConfig = {
+      apiKey:            "REPLACE_WITH_YOUR_FIREBASE_API_KEY",
+      authDomain:        "REPLACE_WITH_YOUR_PROJECT_ID.firebaseapp.com",
+      projectId:         "REPLACE_WITH_YOUR_PROJECT_ID",
+      storageBucket:     "REPLACE_WITH_YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
+      appId:             "REPLACE_WITH_YOUR_APP_ID"
+    };
+    // ────────────────────────────────────────────────────────────────────────
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    // Expose DB helpers on window so the non-module script can call them
+    window._db = db;
+    window._fbModules = { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where };
+  </script>
+
   <style>
-    /* ─── Reset & Base ─── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #f0f4f8;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0a0a0a;
+      color: #f0f0f0;
       min-height: 100vh;
-      color: #1a202c;
-    }
-
-    /* ─── Header ─── */
-    header {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-      color: #fff;
-      text-align: center;
-      padding: 2.5rem 1rem 2rem;
-    }
-    header h1 {
-      font-size: clamp(1.3rem, 4vw, 2.2rem);
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    header p {
-      margin-top: .5rem;
-      font-size: .95rem;
-      opacity: .75;
-      letter-spacing: .03em;
-    }
-
-    /* ─── Calendar wrapper ─── */
-    .cal-wrapper {
-      max-width: 900px;
-      margin: 2rem auto 5rem;
-      padding: 0 1rem;
-    }
-
-    /* ─── Month bar ─── */
-    .month-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-    .month-label {
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: #1a1a2e;
-    }
-    .nav-btn {
-      background: #0f3460;
-      color: #fff;
-      border: none;
-      border-radius: 50%;
-      width: 38px; height: 38px;
-      font-size: 1.1rem;
-      cursor: pointer;
-      transition: background .2s;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .nav-btn:hover { background: #1a4a8a; }
-    .nav-btn:disabled { background: #ccc; cursor: default; }
-
-    /* ─── Day-of-week header ─── */
-    .dow-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 6px;
-      margin-bottom: 6px;
-    }
-    .dow-cell {
-      text-align: center;
-      font-size: .75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: #718096;
-      padding: .4rem 0;
-    }
-
-    /* ─── Calendar grid ─── */
-    .cal-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 6px;
-    }
-    .day-cell {
-      background: #fff;
-      border-radius: 12px;
-      min-height: 90px;
-      padding: .6rem .5rem;
       display: flex;
       flex-direction: column;
       align-items: center;
+    }
+
+    header {
+      width: 100%;
+      background: #111;
+      padding: 28px 16px 18px;
+      text-align: center;
+      border-bottom: 3px solid #1e88e5;
+    }
+    header h1 {
+      font-size: clamp(1.1rem, 4vw, 2rem);
+      letter-spacing: 0.05em;
+      color: #fff;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    #calendar-container {
+      width: 100%;
+      max-width: 900px;
+      padding: 24px 12px;
+    }
+
+    #month-header {
+      display: flex;
+      align-items: center;
       justify-content: space-between;
+      margin-bottom: 16px;
+      padding: 0 4px;
+    }
+    #month-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1e88e5;
+    }
+    #nav-next {
+      background: #1e88e5;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    #nav-next:hover { background: #1565c0; }
+
+    #day-labels {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .day-label {
+      text-align: center;
+      font-size: .78rem;
+      font-weight: 600;
+      color: #aaa;
+      padding: 4px 0;
+    }
+
+    #calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .cal-cell {
+      background: #1a1a1a;
+      border-radius: 8px;
+      min-height: 80px;
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
       border: 2px solid transparent;
-      transition: border-color .2s, transform .15s, box-shadow .2s;
+      transition: border-color .15s, background .15s;
       position: relative;
     }
-    .day-cell.empty { background: transparent; border: none; box-shadow: none; }
-
-    /* clickable open day */
-    .day-cell.open {
-      cursor: pointer;
-    }
-    .day-cell.open:hover {
-      border-color: #0f3460;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(15,52,96,.15);
-    }
-
-    /* today */
-    .day-cell.today {
-      background: #ebf4ff;
-      border-color: #3182ce;
-    }
-    .day-cell.today .day-num { color: #3182ce; font-weight: 800; }
-
-    /* closed */
-    .day-cell.closed {
-      background: #f7fafc;
-      opacity: .6;
+    .cal-cell.empty { background: transparent; cursor: default; border: none; }
+    .cal-cell.closed {
+      background: #161616;
       cursor: not-allowed;
-    }
-
-    /* past */
-    .day-cell.past {
-      opacity: .45;
-      cursor: not-allowed;
-    }
-
-    /* fully booked */
-    .day-cell.full {
       opacity: .55;
+    }
+    .cal-cell.past {
+      opacity: .35;
       cursor: not-allowed;
     }
+    .cal-cell.today { border-color: #1e88e5; background: #0d2a45; }
+    .cal-cell.available:hover { border-color: #1e88e5; background: #172838; }
+    .cal-cell.full { opacity: .45; cursor: not-allowed; }
 
-    .day-num {
-      font-size: .95rem;
+    .cell-day {
+      font-size: .85rem;
       font-weight: 700;
       align-self: flex-start;
-      color: #2d3748;
+      color: #ccc;
     }
-    .avail-text {
+    .cell-slots {
       font-size: .72rem;
-      font-weight: 600;
-      color: #4a5568;
+      color: #90caf9;
       text-align: center;
-      line-height: 1.3;
+      margin-top: 4px;
     }
-    .avail-text.closed-label { color: #e53e3e; letter-spacing: .05em; }
-    .avail-text.full-label { color: #e53e3e; }
-    .avail-text.slots-label { color: #276749; }
+    .cell-closed-text {
+      font-size: .72rem;
+      font-weight: 700;
+      color: #555;
+      letter-spacing: .05em;
+    }
 
-    /* ─── Modal backdrop ─── */
-    .modal-backdrop {
+    /* ── Overlay / Modal ────────────────────────────── */
+    .overlay {
       display: none;
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,.55);
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
       z-index: 100;
       align-items: center;
       justify-content: center;
-      padding: 1rem;
+      padding: 12px;
     }
-    .modal-backdrop.active { display: flex; }
+    .overlay.active { display: flex; }
 
-    /* ─── Modal box ─── */
     .modal {
-      background: #fff;
-      border-radius: 20px;
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 28px 24px;
       width: 100%;
       max-width: 480px;
       max-height: 90vh;
       overflow-y: auto;
-      padding: 2rem;
-      box-shadow: 0 25px 60px rgba(0,0,0,.25);
-      animation: slideUp .25s ease;
+      position: relative;
     }
-    @keyframes slideUp {
-      from { transform: translateY(30px); opacity: 0; }
-      to   { transform: translateY(0);    opacity: 1; }
-    }
-    .modal h2 {
-      font-size: 1.25rem;
-      font-weight: 800;
-      color: #1a1a2e;
-      margin-bottom: .25rem;
-    }
-    .modal .modal-sub {
-      font-size: .85rem;
-      color: #718096;
-      margin-bottom: 1.25rem;
-    }
+    .modal h2 { font-size: 1.2rem; color: #1e88e5; margin-bottom: 16px; }
     .close-btn {
       position: absolute;
-      top: 1rem; right: 1.2rem;
+      top: 12px; right: 14px;
       background: none; border: none;
-      font-size: 1.5rem; color: #718096;
-      cursor: pointer; line-height: 1;
+      font-size: 1.4rem; color: #aaa; cursor: pointer;
     }
-    .close-btn:hover { color: #1a202c; }
+    .close-btn:hover { color: #fff; }
 
-    /* ─── Slot list ─── */
-    .slot-list {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: .6rem;
-      max-height: 340px;
-      overflow-y: auto;
-      padding-right: 2px;
-    }
+    /* Slot list */
+    .slot-list { display: flex; flex-direction: column; gap: 8px; }
     .slot-btn {
-      background: #ebf4ff;
-      color: #0f3460;
-      border: 2px solid #bee3f8;
-      border-radius: 10px;
-      padding: .55rem .5rem;
-      font-size: .85rem;
-      font-weight: 600;
+      background: #1e3a5f;
+      border: 1px solid #1e88e5;
+      color: #90caf9;
+      border-radius: 6px;
+      padding: 10px 14px;
+      text-align: left;
       cursor: pointer;
-      transition: background .15s, border-color .15s;
-      text-align: center;
+      font-size: .9rem;
+      transition: background .15s;
     }
-    .slot-btn:hover {
-      background: #0f3460;
-      color: #fff;
-      border-color: #0f3460;
-    }
+    .slot-btn:hover { background: #1565c0; color: #fff; }
+    .slot-btn.booked { background: #2a1a1a; border-color: #555; color: #666; cursor: not-allowed; }
 
-    /* ─── Booking form ─── */
-    .form-group { margin-bottom: 1rem; }
-    .form-group label {
-      display: block;
-      font-size: .8rem;
-      font-weight: 700;
-      color: #4a5568;
-      margin-bottom: .3rem;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-    .form-group input {
+    /* Form */
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: .82rem; color: #aaa; margin-bottom: 4px; }
+    input, select {
       width: 100%;
-      border: 2px solid #e2e8f0;
-      border-radius: 10px;
-      padding: .65rem .9rem;
-      font-size: .95rem;
-      color: #1a202c;
-      transition: border-color .2s;
-      outline: none;
+      background: #111;
+      border: 1px solid #333;
+      color: #f0f0f0;
+      border-radius: 6px;
+      padding: 9px 11px;
+      font-size: .9rem;
     }
-    .form-group input:focus { border-color: #3182ce; }
-    .form-group input[type="number"] { -moz-appearance: textfield; }
-    .form-group input[type="number"]::-webkit-inner-spin-button,
-    .form-group input[type="number"]::-webkit-outer-spin-button { opacity: 1; }
-
-    .confirm-btn {
+    input:focus, select:focus { outline: none; border-color: #1e88e5; }
+    .btn-primary {
       width: 100%;
-      background: linear-gradient(135deg, #0f3460, #1a4a8a);
+      background: #1e88e5;
       color: #fff;
       border: none;
-      border-radius: 12px;
-      padding: .85rem 1rem;
+      border-radius: 8px;
+      padding: 12px;
       font-size: 1rem;
       font-weight: 700;
       cursor: pointer;
-      transition: opacity .2s;
-      margin-top: .5rem;
+      margin-top: 6px;
+      transition: background .2s;
     }
-    .confirm-btn:hover { opacity: .88; }
-    .confirm-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-primary:hover { background: #1565c0; }
+    .btn-primary:disabled { background: #444; cursor: not-allowed; }
 
-    /* ─── Success message ─── */
-    .success-msg {
-      text-align: center;
-      padding: 1rem 0;
-    }
-    .success-msg .check-icon {
-      font-size: 3rem;
-      margin-bottom: .75rem;
-    }
-    .success-msg h3 {
-      font-size: 1.2rem;
-      font-weight: 800;
-      color: #276749;
-      margin-bottom: .4rem;
-    }
-    .success-msg p {
+    .btn-secondary {
+      width: 100%;
+      background: transparent;
+      color: #90caf9;
+      border: 1px solid #1e88e5;
+      border-radius: 8px;
+      padding: 10px;
       font-size: .9rem;
-      color: #4a5568;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background .2s;
+    }
+    .btn-secondary:hover { background: #0d2a45; }
+
+    .btn-danger {
+      width: 100%;
+      background: transparent;
+      color: #ef9a9a;
+      border: 1px solid #c62828;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background .2s;
+    }
+    .btn-danger:hover { background: #2a1212; }
+
+    #confirm-msg {
+      text-align: center;
+      padding: 8px 0;
+      font-size: .9rem;
     }
 
-    /* ─── Contact FAB ─── */
-    .contact-fab {
+    /* Appointment Management View */
+    #appt-info p { margin-bottom: 8px; font-size: .92rem; line-height: 1.5; }
+    #appt-info strong { color: #90caf9; }
+
+    /* ── Contact FAB ────────────────────────────────── */
+    #contact-fab {
       position: fixed;
-      bottom: 1.5rem;
-      right: 1.5rem;
-      z-index: 200;
+      bottom: 24px; right: 24px;
+      z-index: 50;
     }
-    .fab-main {
+    #contact-fab-btn {
       width: 56px; height: 56px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #0f3460, #1a4a8a);
-      color: #fff;
+      background: #1e88e5;
       border: none;
-      font-size: 1.5rem;
+      color: #fff;
+      font-size: 1.6rem;
       cursor: pointer;
-      box-shadow: 0 6px 20px rgba(15,52,96,.4);
-      display: flex; align-items: center; justify-content: center;
-      transition: transform .2s;
+      box-shadow: 0 4px 14px rgba(30,136,229,.5);
+      transition: background .2s;
     }
-    .fab-main:hover { transform: scale(1.08); }
-    .fab-options {
+    #contact-fab-btn:hover { background: #1565c0; }
+    #contact-menu {
       display: none;
       flex-direction: column;
-      align-items: flex-end;
-      gap: .6rem;
-      margin-bottom: .7rem;
+      gap: 8px;
+      position: absolute;
+      bottom: 66px; right: 0;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 10px;
+      min-width: 160px;
     }
-    .fab-options.open { display: flex; }
-    .fab-option {
-      display: flex;
-      align-items: center;
-      gap: .6rem;
-      background: #fff;
-      color: #0f3460;
-      border: none;
-      border-radius: 28px;
-      padding: .55rem 1rem .55rem .8rem;
-      font-size: .9rem;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    #contact-menu.open { display: flex; }
+    .contact-option {
+      display: flex; align-items: center; gap: 10px;
       text-decoration: none;
-      white-space: nowrap;
+      color: #90caf9;
+      font-size: .9rem;
+      padding: 6px 8px;
+      border-radius: 6px;
       transition: background .15s;
     }
-    .fab-option:hover { background: #ebf4ff; }
-    .fab-option .fab-icon { font-size: 1.1rem; }
+    .contact-option:hover { background: #1e3a5f; color: #fff; }
 
-    /* ─── Spinner ─── */
-    .spinner {
-      display: inline-block;
-      width: 18px; height: 18px;
-      border: 3px solid rgba(255,255,255,.4);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      vertical-align: middle;
-      margin-right: .4rem;
+    #loading-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      color: #90caf9;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-overlay.active { display: flex; }
 
-    /* ─── Notice banner ─── */
-    .notice {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      border-radius: 10px;
-      padding: .75rem 1rem;
-      font-size: .82rem;
-      color: #856404;
-      margin-bottom: 1.5rem;
-      text-align: center;
-    }
-
-    /* ─── Responsive ─── */
-    @media (max-width: 600px) {
-      .day-cell { min-height: 70px; padding: .4rem .3rem; }
-      .avail-text { font-size: .62rem; }
-      .day-num { font-size: .8rem; }
-      .slot-list { grid-template-columns: 1fr; }
+    @media (max-width: 520px) {
+      .cal-cell { min-height: 60px; padding: 5px 3px; }
+      .cell-day { font-size: .7rem; }
+      .cell-slots { font-size: .6rem; }
     }
   </style>
 </head>
 <body>
 
-<!-- ══════════════════ HEADER ══════════════════ -->
 <header>
-  <h1>Schedule Your Next Haircut with Titus</h1>
-  <p>Pick a day and time that works for you — it's fast and easy.</p>
+  <h1>Schedule Your Next Haircut With Titus</h1>
 </header>
 
-<!-- ══════════════════ CALENDAR ══════════════════ -->
-<div class="cal-wrapper">
-
-  <!-- EmailJS not configured notice (shown until user sets up keys) -->
-  <div class="notice" id="emailNotice">
-    ⚠️ <strong>Setup required:</strong> Email notifications are not yet active.
-    See the <a href="README.md" target="_blank">README</a> for EmailJS setup instructions.
+<div id="calendar-container">
+  <div id="month-header">
+    <span id="month-title"></span>
+    <button id="nav-next">Next ›</button>
   </div>
-
-  <div class="month-bar">
-    <div class="month-label" id="monthLabel"></div>
-    <div style="display:flex;gap:.5rem;">
-      <button class="nav-btn" id="prevBtn" title="Previous month">&#8592;</button>
-      <button class="nav-btn" id="nextBtn" title="Next month">&#8594;</button>
-    </div>
+  <div id="day-labels">
+    <div class="day-label">Sun</div>
+    <div class="day-label">Mon</div>
+    <div class="day-label">Tue</div>
+    <div class="day-label">Wed</div>
+    <div class="day-label">Thu</div>
+    <div class="day-label">Fri</div>
+    <div class="day-label">Sat</div>
   </div>
-
-  <div class="dow-grid">
-    <div class="dow-cell">Sun</div>
-    <div class="dow-cell">Mon</div>
-    <div class="dow-cell">Tue</div>
-    <div class="dow-cell">Wed</div>
-    <div class="dow-cell">Thu</div>
-    <div class="dow-cell">Fri</div>
-    <div class="dow-cell">Sat</div>
-  </div>
-
-  <div class="cal-grid" id="calGrid"></div>
+  <div id="calendar-grid"></div>
 </div>
 
-<!-- ══════════════════ MODAL 1 — Slot picker ══════════════════ -->
-<div class="modal-backdrop" id="slotModal">
-  <div class="modal" style="position:relative;">
-    <button class="close-btn" id="closeSlotModal">&times;</button>
-    <h2 id="slotModalTitle"></h2>
-    <div class="modal-sub" id="slotModalSub"></div>
-    <div class="slot-list" id="slotList"></div>
+<!-- Slot picker modal -->
+<div class="overlay" id="slot-overlay">
+  <div class="modal">
+    <button class="close-btn" id="slot-close">✕</button>
+    <h2 id="slot-date-title">Available Slots</h2>
+    <div class="slot-list" id="slot-list"></div>
   </div>
 </div>
 
-<!-- ══════════════════ MODAL 2 — Booking form ══════════════════ -->
-<div class="modal-backdrop" id="bookingModal">
-  <div class="modal" style="position:relative;">
-    <button class="close-btn" id="closeBookingModal">&times;</button>
-    <div id="bookingContent">
-      <h2>Almost done!</h2>
-      <div class="modal-sub" id="bookingModalSub"></div>
-      <form id="bookingForm" novalidate>
-        <div class="form-group">
-          <label for="fieldName">Full Name</label>
-          <input type="text" id="fieldName" placeholder="John Doe" required />
-        </div>
-        <div class="form-group">
-          <label for="fieldPeople">Number of People</label>
-          <input type="number" id="fieldPeople" value="1" min="1" max="10" required />
-        </div>
-        <div class="form-group">
-          <label for="fieldPhone">Cell Number</label>
-          <input type="tel" id="fieldPhone" placeholder="(555) 555-5555" required />
-        </div>
-        <div class="form-group">
-          <label for="fieldEmail">Email Address</label>
-          <input type="email" id="fieldEmail" placeholder="you@example.com" required />
-        </div>
-        <button type="submit" class="confirm-btn" id="confirmBtn">Confirm Appointment</button>
-      </form>
-    </div>
-    <div class="success-msg" id="successMsg" style="display:none;">
-      <div class="check-icon">✅</div>
-      <h3>You're all set!</h3>
-      <p id="successDetail"></p>
+<!-- Booking form modal -->
+<div class="overlay" id="form-overlay">
+  <div class="modal">
+    <button class="close-btn" id="form-close">✕</button>
+    <h2 id="form-title">Book Appointment</h2>
+    <div id="form-area">
+      <div class="form-group">
+        <label for="f-name">Full Name *</label>
+        <input type="text" id="f-name" placeholder="Your name" required />
+      </div>
+      <div class="form-group">
+        <label for="f-people">Number of People *</label>
+        <input type="number" id="f-people" value="1" min="1" max="10" required />
+      </div>
+      <div class="form-group">
+        <label for="f-phone">Cell Number *</label>
+        <input type="tel" id="f-phone" placeholder="555-555-5555" required />
+      </div>
+      <div class="form-group">
+        <label for="f-email">Email *</label>
+        <input type="email" id="f-email" placeholder="you@email.com" required />
+      </div>
+      <div id="confirm-msg"></div>
+      <button class="btn-primary" id="btn-confirm">Confirm Appointment</button>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════ CONTACT FAB ══════════════════ -->
-<div class="contact-fab">
-  <div class="fab-options" id="fabOptions">
-    <a href="tel:2294492453" class="fab-option">
-      <span class="fab-icon">📞</span> Call Titus
-    </a>
-    <a href="mailto:contact@tituspaine.com" class="fab-option">
-      <span class="fab-icon">✉️</span> Email Titus
-    </a>
+<!-- Appointment management modal -->
+<div class="overlay" id="mgmt-overlay">
+  <div class="modal">
+    <button class="close-btn" id="mgmt-close">✕</button>
+    <h2>Your Appointment</h2>
+    <div id="appt-info"></div>
+    <div id="mgmt-actions"></div>
   </div>
-  <button class="fab-main" id="fabMain" aria-label="Contact Titus">💬</button>
 </div>
 
-<!-- ══════════════════ SCRIPT ══════════════════ -->
+<!-- Reschedule slot picker modal -->
+<div class="overlay" id="reschedule-overlay">
+  <div class="modal">
+    <button class="close-btn" id="reschedule-close">✕</button>
+    <h2>Reschedule — Pick a new date</h2>
+    <div id="reschedule-cal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <span id="reschedule-month-title" style="font-size:1.1rem;font-weight:700;color:#1e88e5;"></span>
+      <button id="reschedule-nav-next" style="background:#1e88e5;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;">Next ›</button>
+    </div>
+    <div id="reschedule-day-labels" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;">
+      <div class="day-label">Su</div><div class="day-label">Mo</div><div class="day-label">Tu</div>
+      <div class="day-label">We</div><div class="day-label">Th</div><div class="day-label">Fr</div>
+      <div class="day-label">Sa</div>
+    </div>
+    <div id="reschedule-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
+    <div id="reschedule-slot-area" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">⏳ Please wait…</div>
+
+<!-- Contact FAB -->
+<div id="contact-fab">
+  <button id="contact-fab-btn" title="Contact Titus">✉</button>
+  <div id="contact-menu">
+    <a class="contact-option" href="tel:2294492453">📞 Call</a>
+    <a class="contact-option" href="mailto:contact@tituspaine.com">✉ Email</a>
+  </div>
+</div>
+
 <script>
-// ════════════════════════════════════════════════════════
-//  CONFIG  — fill in after EmailJS setup
-// ════════════════════════════════════════════════════════
-const EMAILJS_PUBLIC_KEY    = '';   // your EmailJS public key
-const EMAILJS_SERVICE_ID    = '';   // e.g. 'service_xxxxxxx'
-const EMAILJS_TEMPLATE_CONF = '';   // confirmation + owner notification template
-const EMAILJS_TEMPLATE_REM  = '';   // reminder template (day-before / day-of)
-const OWNER_EMAIL           = 'contact@tituspaine.com';
+// ─── EmailJS Config — replace with your values ──────────────────────────────
+const EMAILJS_PUBLIC_KEY  = "REPLACE_WITH_YOUR_EMAILJS_PUBLIC_KEY";
+const EMAILJS_SERVICE_ID  = "REPLACE_WITH_YOUR_EMAILJS_SERVICE_ID";
+const EMAILJS_CONFIRM_TEMPLATE   = "template_confirm";
+const EMAILJS_NOTIFY_TEMPLATE    = "template_notify";
+const EMAILJS_MGMT_TEMPLATE      = "template_mgmt_update";
+// ────────────────────────────────────────────────────────────────────────────
 
-const emailJsConfigured = EMAILJS_PUBLIC_KEY && EMAILJS_SERVICE_ID &&
-                          EMAILJS_TEMPLATE_CONF;
+const OWNER_EMAIL = "contact@tituspaine.com";
+const SITE_URL    = "https://tituspaine.github.io/schedule/";
 
-// ════════════════════════════════════════════════════════
-//  BUSINESS HOURS LOGIC
-// ════════════════════════════════════════════════════════
-const OPEN  = { h:  7, m: 30 };   // 7:30 AM
-const CLOSE = { h: 17, m:  0 };   // 5:00 PM
-const LUNCH_START = { h: 12, m: 0 };
-const LUNCH_END   = { h: 13, m: 0 };
-const TUE_FRI_BEFORE_LUNCH = 10;
-const TUE_FRI_AFTER_LUNCH  = 10;
-const SAT_SLOT_MINS = 30;
+emailjs.init(EMAILJS_PUBLIC_KEY);
 
-function pad(n){ return String(n).padStart(2,'0'); }
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function idb() { return window._db; }
+function fbm() { return window._fbModules; }
 
-function fmtTime(h, m){
-  const ampm = h < 12 ? 'AM' : 'PM';
-  const hh   = h % 12 || 12;
-  return `${hh}:${pad(m)} ${ampm}`;
+function showLoading(v) {
+  document.getElementById("loading-overlay").classList.toggle("active", v);
 }
 
-function addMinutes(h, m, mins){
-  const total = h * 60 + m + mins;
-  return { h: Math.floor(total / 60), m: total % 60 };
+function pad2(n) { return String(n).padStart(2,"0"); }
+
+function dateKey(y,m,d) {
+  return `${y}-${pad2(m+1)}-${pad2(d)}`;
 }
 
-function timeToMins(h, m){ return h * 60 + m; }
+const MONTH_NAMES = ["January","February","March","April","May","June",
+  "July","August","September","October","November","December"];
 
-// Returns array of { label, key } for a given day-of-week (0=Sun … 6=Sat)
-function getSlotsForDow(dow){
-  if(dow === 0 || dow === 1) return null; // closed
+// ─── Slot Generation ────────────────────────────────────────────────────────
+// day 0=Sun,1=Mon,...,6=Sat
+function generateSlots(dateObj) {
+  const dow = dateObj.getDay();
+  if (dow === 0 || dow === 1) return null; // closed
 
-  if(dow >= 2 && dow <= 5){
-    // Tue–Fri: 10 before lunch, 10 after lunch
-    const slots = [];
-
-    // before lunch
-    let cur = { ...OPEN };
-    const openMins   = timeToMins(OPEN.h, OPEN.m);
-    const lunchMins  = timeToMins(LUNCH_START.h, LUNCH_START.m);
-    const afterMins  = timeToMins(LUNCH_END.h, LUNCH_END.m);
-    const closeMins  = timeToMins(CLOSE.h, CLOSE.m);
-
-    const morningWindow = lunchMins - openMins;   // minutes before lunch
-    const afternoonWindow = closeMins - afterMins; // minutes after lunch
-    const morningStep   = morningWindow   / TUE_FRI_BEFORE_LUNCH;
-    const afternoonStep = afternoonWindow / TUE_FRI_AFTER_LUNCH;
-
-    for(let i = 0; i < TUE_FRI_BEFORE_LUNCH; i++){
-      const mins = openMins + Math.round(i * morningStep);
-      const h = Math.floor(mins / 60), m = mins % 60;
-      slots.push({ label: fmtTime(h, m), key: `${pad(h)}${pad(m)}` });
+  const slots = [];
+  if (dow >= 2 && dow <= 5) {
+    // Tue-Fri: 7:30-12:00 (10 slots) and 13:00-17:00 (10 slots)
+    // Morning: 7:30 spaced evenly across 4.5h for 10 slots
+    // afternoon: 13:00 spaced evenly across 4h for 10 slots
+    // slot duration = 27min morning, 24min afternoon — keep it simple: 7:30,8:03,8:36...
+    // Use exactly the times asked: 10 slots before lunch (7:30–12:00) and 10 after (13:00–17:00)
+    // Morning: 4.5 hours = 270 min / 10 = 27 min each
+    for (let i = 0; i < 10; i++) {
+      const totalMin = 7*60 + 30 + i*27;
+      slots.push(fmtTime(totalMin));
     }
-    for(let i = 0; i < TUE_FRI_AFTER_LUNCH; i++){
-      const mins = afterMins + Math.round(i * afternoonStep);
-      const h = Math.floor(mins / 60), m = mins % 60;
-      slots.push({ label: fmtTime(h, m), key: `${pad(h)}${pad(m)}` });
+    // Afternoon: 4 hours = 240 min / 10 = 24 min each
+    for (let i = 0; i < 10; i++) {
+      const totalMin = 13*60 + i*24;
+      slots.push(fmtTime(totalMin));
     }
-    return slots;
+  } else if (dow === 6) {
+    // Saturday: check actual open/close — assume same 7:30-17:00 with 30-min slots
+    let t = 7*60+30;
+    while (t + 30 <= 17*60) {
+      slots.push(fmtTime(t));
+      t += 30;
+    }
   }
-
-  if(dow === 6){
-    // Saturday: as many 30-min slots as possible 7:30–5
-    const slots = [];
-    let cur = { ...OPEN };
-    while(timeToMins(cur.h, cur.m) + SAT_SLOT_MINS <= timeToMins(CLOSE.h, CLOSE.m)){
-      slots.push({ label: fmtTime(cur.h, cur.m), key: `${pad(cur.h)}${pad(cur.m)}` });
-      cur = addMinutes(cur.h, cur.m, SAT_SLOT_MINS);
-    }
-    return slots;
-  }
-  return [];
+  return slots;
 }
 
-// ════════════════════════════════════════════════════════
-//  LOCALSTORAGE PERSISTENCE
-// ════════════════════════════════════════════════════════
-const STORAGE_KEY = 'titus_bookings_v1';
-
-function loadBookings(){
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-  catch{ return {}; }
-}
-function saveBookings(b){ localStorage.setItem(STORAGE_KEY, JSON.stringify(b)); }
-
-// Key format: "YYYY-MM-DD_HHmm"
-function dayKey(year, month1, day){ return `${year}-${pad(month1)}-${pad(day)}`; }
-function slotKey(dKey, timeKey){ return `${dKey}_${timeKey}`; }
-
-function getBookedSlotsForDay(dKey){
-  const b = loadBookings();
-  return Object.keys(b).filter(k => k.startsWith(dKey + '_')).map(k => k.split('_')[1]);
+function fmtTime(totalMin) {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const ampm = h < 12 ? "AM" : "PM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${pad2(m)} ${ampm}`;
 }
 
-// ════════════════════════════════════════════════════════
-//  CALENDAR STATE
-// ════════════════════════════════════════════════════════
+// ─── Firebase booking helpers ────────────────────────────────────────────────
+async function getBookedSlots(dateStr) {
+  const { collection, query, where, getDocs } = fbm();
+  const db = idb();
+  const q = query(collection(db,"appointments"), where("date","==",dateStr), where("status","==","active"));
+  const snap = await getDocs(q);
+  const booked = new Set();
+  snap.forEach(d => booked.add(d.data().slot));
+  return booked;
+}
+
+async function bookSlot(apptData) {
+  const { doc, setDoc } = fbm();
+  const db = idb();
+  // Idempotent write — use date+slot as doc ID to prevent double-booking
+  const docId = `${apptData.date}_${apptData.slot.replace(/[: ]/g,"-")}`;
+  const ref = doc(db, "appointments", docId);
+  await setDoc(ref, { ...apptData, status: "active", createdAt: new Date().toISOString() }, { merge: false });
+  return docId;
+}
+
+async function getAppointment(apptId) {
+  const { doc, getDoc } = fbm();
+  const snap = await getDoc(doc(idb(),"appointments",apptId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
+async function cancelAppointment(apptId) {
+  const { doc, setDoc } = fbm();
+  await setDoc(doc(idb(),"appointments",apptId), { status:"cancelled" }, { merge:true });
+}
+
+async function rescheduleAppointment(apptId, newDate, newSlot) {
+  const { doc, setDoc } = fbm();
+  const db = idb();
+  const newDocId = `${newDate}_${newSlot.replace(/[: ]/g,"-")}`;
+  const oldRef = doc(db,"appointments",apptId);
+  const newRef = doc(db,"appointments",newDocId);
+
+  const oldSnap = await window._fbModules.getDoc(oldRef);
+  if (!oldSnap.exists()) throw new Error("Appointment not found");
+  const data = oldSnap.data();
+
+  // Write new doc
+  await setDoc(newRef, { ...data, date: newDate, slot: newSlot, status:"active",
+    rescheduledFrom: apptId, updatedAt: new Date().toISOString() }, { merge: false });
+  // Cancel old
+  await setDoc(oldRef, { status:"cancelled" }, { merge:true });
+  return newDocId;
+}
+
+// ─── Email helpers ───────────────────────────────────────────────────────────
+async function sendEmail(templateId, params) {
+  return emailjs.send(EMAILJS_SERVICE_ID, templateId, params);
+}
+
+function buildManagementLink(apptId) {
+  return `${SITE_URL}?appt=${encodeURIComponent(apptId)}`;
+}
+
+async function sendConfirmationEmails(appt, apptId) {
+  const link = buildManagementLink(apptId);
+  const sharedParams = {
+    client_name: appt.name,
+    appt_date: appt.date,
+    appt_slot: appt.slot,
+    num_people: appt.people,
+    client_phone: appt.phone,
+    client_email: appt.email,
+    manage_link: link
+  };
+  // Send to client
+  await sendEmail(EMAILJS_CONFIRM_TEMPLATE, { ...sharedParams, to_email: appt.email, to_name: appt.name });
+  // Notify owner
+  await sendEmail(EMAILJS_NOTIFY_TEMPLATE, { ...sharedParams, to_email: OWNER_EMAIL, to_name: "Titus" });
+}
+
+async function sendMgmtUpdateEmail(appt, action, newDate, newSlot) {
+  const params = {
+    to_email: OWNER_EMAIL,
+    to_name: "Titus",
+    client_name: appt.name,
+    action: action,
+    old_date: appt.date,
+    old_slot: appt.slot,
+    new_date: newDate || "",
+    new_slot: newSlot || "",
+    client_phone: appt.phone,
+    client_email: appt.email,
+    num_people: appt.people
+  };
+  // Also notify the client
+  const clientParams = { ...params, to_email: appt.email, to_name: appt.name };
+  await sendEmail(EMAILJS_MGMT_TEMPLATE, params);
+  await sendEmail(EMAILJS_MGMT_TEMPLATE, clientParams);
+}
+
+// ─── Calendar State ──────────────────────────────────────────────────────────
 const today = new Date();
 today.setHours(0,0,0,0);
 let viewYear  = today.getFullYear();
-let viewMonth = today.getMonth(); // 0-based
+let viewMonth = today.getMonth();
 
-function monthName(m){ return new Date(2000, m, 1).toLocaleString('default', {month: 'long'}); }
+let selectedDate = null; // { year, month, day, dateStr, dateObj }
+let selectedSlot = null;
+let bookedSlotsCache = {}; // dateStr -> Set
 
-function renderCalendar(){
-  const grid      = document.getElementById('calGrid');
-  const label     = document.getElementById('monthLabel');
-  const prevBtn   = document.getElementById('prevBtn');
-  const nextBtn   = document.getElementById('nextBtn');
-  const thisYear  = today.getFullYear();
-  const thisMonth = today.getMonth();
+async function renderCalendar() {
+  const grid = document.getElementById("calendar-grid");
+  grid.innerHTML = "";
+  document.getElementById("month-title").textContent =
+    `${MONTH_NAMES[viewMonth]} ${viewYear}`;
 
-  label.textContent = `${monthName(viewMonth)} ${viewYear}`;
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
 
-  // Disable prev if viewing current month
-  prevBtn.disabled = (viewYear === thisYear && viewMonth === thisMonth);
+  // Fetch all booked slots for this month in one query
+  showLoading(true);
+  let monthBooked = {}; // dateStr -> Set<slot>
+  try {
+    const { collection, query, where, getDocs } = fbm();
+    const startStr = dateKey(viewYear, viewMonth, 1);
+    const endStr   = dateKey(viewYear, viewMonth, daysInMonth);
+    const q = query(collection(idb(),"appointments"),
+      where("date",">=",startStr), where("date","<=",endStr), where("status","==","active"));
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+      const data = d.data();
+      if (!monthBooked[data.date]) monthBooked[data.date] = new Set();
+      monthBooked[data.date].add(data.slot);
+    });
+  } catch(e) { console.warn("Firestore error:", e); }
+  bookedSlotsCache = monthBooked;
+  showLoading(false);
 
-  grid.innerHTML = '';
-
-  const firstDow = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-  // leading empty cells
-  for(let i = 0; i < firstDow; i++){
-    const empty = document.createElement('div');
-    empty.className = 'day-cell empty';
-    grid.appendChild(empty);
+  // Empty leading cells
+  for (let i = 0; i < firstDay; i++) {
+    const el = document.createElement("div");
+    el.className = "cal-cell empty";
+    grid.appendChild(el);
   }
 
-  for(let d = 1; d <= daysInMonth; d++){
-    const date = new Date(viewYear, viewMonth, d);
-    const dow  = date.getDay();
-    const dKey = dayKey(viewYear, viewMonth + 1, d);
-    const isToday  = (date.getTime() === today.getTime());
-    const isPast   = (date < today);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(viewYear, viewMonth, d);
+    const dow = dateObj.getDay();
+    const dStr = dateKey(viewYear, viewMonth, d);
+    const isPast = dateObj < today;
     const isClosed = (dow === 0 || dow === 1);
+    const cell = document.createElement("div");
+    cell.className = "cal-cell";
 
-    const allSlots   = isClosed ? null : getSlotsForDow(dow);
-    const totalSlots = allSlots ? allSlots.length : 0;
-    const booked     = isClosed ? [] : getBookedSlotsForDay(dKey);
-    const available  = totalSlots - booked.length;
-    const isFull     = !isClosed && available <= 0;
+    const dayLabel = document.createElement("div");
+    dayLabel.className = "cell-day";
+    dayLabel.textContent = d;
+    cell.appendChild(dayLabel);
 
-    const cell = document.createElement('div');
-    let classes = 'day-cell';
+    if (dateObj.getTime() === today.getTime()) cell.classList.add("today");
 
-    let availLabel = '';
-    if(isClosed){
-      classes += ' closed';
-      availLabel = '<span class="avail-text closed-label">CLOSED</span>';
-    } else if(isPast){
-      classes += ' past';
-      availLabel = `<span class="avail-text">${available > 0 ? available + ' slot' + (available===1?'':'s') : 'Closed'}</span>`;
-    } else if(isFull){
-      classes += ' full';
-      availLabel = '<span class="avail-text full-label">Fully booked</span>';
+    if (isClosed) {
+      cell.classList.add("closed");
+      const cl = document.createElement("div");
+      cl.className = "cell-closed-text";
+      cl.textContent = "CLOSED";
+      cell.appendChild(cl);
+    } else if (isPast) {
+      cell.classList.add("past");
+      const cl = document.createElement("div");
+      cl.className = "cell-slots";
+      cl.textContent = "—";
+      cell.appendChild(cl);
     } else {
-      classes += ' open';
-      availLabel = `<span class="avail-text slots-label">(${available} available slot${available===1?'':'s'})</span>`;
-    }
+      const allSlots = generateSlots(dateObj) || [];
+      const booked = monthBooked[dStr] || new Set();
+      const available = allSlots.filter(s => !booked.has(s)).length;
 
-    if(isToday) classes += ' today';
+      const cl = document.createElement("div");
+      cl.className = "cell-slots";
 
-    cell.className = classes;
-    cell.innerHTML = `<span class="day-num">${d}</span>${availLabel}`;
-
-    if(!isClosed && !isPast && !isFull){
-      cell.addEventListener('click', () => openSlotModal(viewYear, viewMonth + 1, d, allSlots, dKey));
+      if (available === 0) {
+        cl.textContent = "No slots";
+        cell.classList.add("full");
+      } else {
+        cl.textContent = `${available} slot${available>1?"s":""} available`;
+        cell.classList.add("available");
+        cell.addEventListener("click", () => openSlotModal(viewYear, viewMonth, d));
+      }
+      cell.appendChild(cl);
     }
 
     grid.appendChild(cell);
   }
 }
 
-// ════════════════════════════════════════════════════════
-//  SLOT MODAL
-// ════════════════════════════════════════════════════════
-let selectedSlot = null; // { dKey, timeKey, label, dateLabel }
+// ─── Slot Modal ──────────────────────────────────────────────────────────────
+async function openSlotModal(y, m, d) {
+  const dateObj = new Date(y, m, d);
+  const dStr = dateKey(y, m, d);
+  const allSlots = generateSlots(dateObj);
+  if (!allSlots) return;
 
-function openSlotModal(year, month1, day, allSlots, dKey){
-  const date    = new Date(year, month1 - 1, day);
-  const dowName = date.toLocaleString('default', { weekday: 'long' });
-  const dateStr = date.toLocaleString('default', { month: 'long', day: 'numeric', year: 'numeric' });
+  const booked = bookedSlotsCache[dStr] || new Set();
 
-  document.getElementById('slotModalTitle').textContent = dateStr;
-  document.getElementById('slotModalSub').textContent  = `${dowName} — select your preferred time`;
+  document.getElementById("slot-date-title").textContent =
+    dateObj.toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
 
-  const booked = getBookedSlotsForDay(dKey);
-  const available = allSlots.filter(s => !booked.includes(s.key));
+  const list = document.getElementById("slot-list");
+  list.innerHTML = "";
 
-  const list = document.getElementById('slotList');
-  list.innerHTML = '';
-
-  if(available.length === 0){
-    list.innerHTML = '<p style="color:#e53e3e;font-weight:600;">No slots left for this day.</p>';
-  } else {
-    available.forEach(slot => {
-      const btn = document.createElement('button');
-      btn.className = 'slot-btn';
-      btn.textContent = slot.label;
-      btn.addEventListener('click', () => {
-        selectedSlot = { dKey, timeKey: slot.key, label: slot.label, dateLabel: dateStr };
-        closeModal('slotModal');
-        openBookingModal();
+  allSlots.forEach(slot => {
+    const btn = document.createElement("button");
+    btn.className = "slot-btn" + (booked.has(slot) ? " booked" : "");
+    btn.textContent = slot + (booked.has(slot) ? " — Booked" : "");
+    btn.disabled = booked.has(slot);
+    if (!booked.has(slot)) {
+      btn.addEventListener("click", () => {
+        selectedDate = { year: y, month: m, day: d, dateStr: dStr, dateObj };
+        selectedSlot = slot;
+        closeOverlay("slot-overlay");
+        openFormModal();
       });
-      list.appendChild(btn);
-    });
-  }
-
-  document.getElementById('slotModal').classList.add('active');
-}
-
-function closeModal(id){
-  document.getElementById(id).classList.remove('active');
-}
-
-document.getElementById('closeSlotModal').addEventListener('click', () => closeModal('slotModal'));
-document.getElementById('slotModal').addEventListener('click', e => {
-  if(e.target === document.getElementById('slotModal')) closeModal('slotModal');
-});
-
-// ════════════════════════════════════════════════════════
-//  BOOKING MODAL
-// ════════════════════════════════════════════════════════
-function openBookingModal(){
-  if(!selectedSlot) return;
-  document.getElementById('bookingModalSub').textContent =
-    `${selectedSlot.dateLabel} at ${selectedSlot.label}`;
-  document.getElementById('bookingContent').style.display = '';
-  document.getElementById('successMsg').style.display = 'none';
-  document.getElementById('bookingForm').reset();
-  document.getElementById('fieldPeople').value = 1;
-  document.getElementById('bookingModal').classList.add('active');
-}
-
-document.getElementById('closeBookingModal').addEventListener('click', () => closeModal('bookingModal'));
-document.getElementById('bookingModal').addEventListener('click', e => {
-  if(e.target === document.getElementById('bookingModal')) closeModal('bookingModal');
-});
-
-// ════════════════════════════════════════════════════════
-//  FORM SUBMIT
-// ════════════════════════════════════════════════════════
-document.getElementById('bookingForm').addEventListener('submit', async function(e){
-  e.preventDefault();
-  const name   = document.getElementById('fieldName').value.trim();
-  const people = parseInt(document.getElementById('fieldPeople').value, 10);
-  const phone  = document.getElementById('fieldPhone').value.trim();
-  const email  = document.getElementById('fieldEmail').value.trim();
-
-  if(!name || !people || !phone || !email){ alert('Please fill in all fields.'); return; }
-
-  const btn = document.getElementById('confirmBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Confirming…';
-
-  // Save booking to localStorage
-  const bookings = loadBookings();
-  const sk = slotKey(selectedSlot.dKey, selectedSlot.timeKey);
-  bookings[sk] = { name, people, phone, email, bookedAt: new Date().toISOString() };
-  saveBookings(bookings);
-
-  // Send emails if EmailJS is configured
-  if(emailJsConfigured){
-    try {
-      emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
-
-      const templateParams = {
-        to_email:   email,
-        to_name:    name,
-        appt_date:  selectedSlot.dateLabel,
-        appt_time:  selectedSlot.label,
-        num_people: people,
-        phone:      phone,
-        owner_email: OWNER_EMAIL,
-      };
-
-      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_CONF, templateParams);
-
-      // Reminder scheduling is handled server-side / via EmailJS delay feature
-      // or a secondary template if supported
-    } catch(err){
-      console.warn('EmailJS error:', err);
     }
-  }
+    list.appendChild(btn);
+  });
 
-  // Show success
-  btn.disabled = false;
-  btn.innerHTML = 'Confirm Appointment';
-  document.getElementById('bookingContent').style.display = 'none';
-  document.getElementById('successDetail').textContent =
-    `${selectedSlot.dateLabel} at ${selectedSlot.label}. A confirmation email has been sent${emailJsConfigured ? '' : ' (email service not yet configured)'}.`;
-  document.getElementById('successMsg').style.display = '';
-
-  // Refresh calendar
-  renderCalendar();
-
-  // Hide notice once booking works
-  if(emailJsConfigured) document.getElementById('emailNotice').style.display = 'none';
-});
-
-// ════════════════════════════════════════════════════════
-//  NAVIGATION
-// ════════════════════════════════════════════════════════
-document.getElementById('prevBtn').addEventListener('click', () => {
-  viewMonth--;
-  if(viewMonth < 0){ viewMonth = 11; viewYear--; }
-  renderCalendar();
-});
-document.getElementById('nextBtn').addEventListener('click', () => {
-  viewMonth++;
-  if(viewMonth > 11){ viewMonth = 0; viewYear++; }
-  renderCalendar();
-});
-
-// ════════════════════════════════════════════════════════
-//  CONTACT FAB
-// ════════════════════════════════════════════════════════
-document.getElementById('fabMain').addEventListener('click', () => {
-  document.getElementById('fabOptions').classList.toggle('open');
-});
-document.addEventListener('click', e => {
-  const fab = document.querySelector('.contact-fab');
-  if(!fab.contains(e.target)){
-    document.getElementById('fabOptions').classList.remove('open');
-  }
-});
-
-// ════════════════════════════════════════════════════════
-//  INIT
-// ════════════════════════════════════════════════════════
-if(emailJsConfigured){
-  document.getElementById('emailNotice').style.display = 'none';
+  openOverlay("slot-overlay");
 }
-renderCalendar();
+
+// ─── Form Modal ──────────────────────────────────────────────────────────────
+function openFormModal() {
+  document.getElementById("form-title").textContent =
+    `Book: ${selectedDate.dateObj.toLocaleDateString("en-US",{month:"long",day:"numeric"})} @ ${selectedSlot}`;
+  document.getElementById("confirm-msg").textContent = "";
+  openOverlay("form-overlay");
+}
+
+document.getElementById("btn-confirm").addEventListener("click", async () => {
+  const name   = document.getElementById("f-name").value.trim();
+  const people = document.getElementById("f-people").value;
+  const phone  = document.getElementById("f-phone").value.trim();
+  const email  = document.getElementById("f-email").value.trim();
+  const msg    = document.getElementById("confirm-msg");
+
+  if (!name || !people || !phone || !email) {
+    msg.style.color = "#ef9a9a";
+    msg.textContent = "Please fill in all fields.";
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    msg.style.color = "#ef9a9a";
+    msg.textContent = "Please enter a valid email address.";
+    return;
+  }
+
+  const btn = document.getElementById("btn-confirm");
+  btn.disabled = true;
+  btn.textContent = "Booking…";
+  showLoading(true);
+
+  const apptData = {
+    date:   selectedDate.dateStr,
+    slot:   selectedSlot,
+    name, people, phone, email
+  };
+
+  try {
+    // Double-booking guard: fetch fresh booked slots right before writing
+    const fresh = await getBookedSlots(selectedDate.dateStr);
+    if (fresh.has(selectedSlot)) {
+      msg.style.color = "#ef9a9a";
+      msg.textContent = "Sorry, this slot was just taken. Please pick another.";
+      btn.disabled = false;
+      btn.textContent = "Confirm Appointment";
+      showLoading(false);
+      // Refresh cache
+      bookedSlotsCache[selectedDate.dateStr] = fresh;
+      return;
+    }
+
+    const apptId = await bookSlot(apptData);
+    await sendConfirmationEmails(apptData, apptId);
+
+    msg.style.color = "#a5d6a7";
+    msg.textContent = "✅ Appointment confirmed! Check your email for details.";
+    btn.textContent = "Confirmed!";
+
+    // Refresh calendar
+    bookedSlotsCache[selectedDate.dateStr] = fresh;
+    bookedSlotsCache[selectedDate.dateStr].add(selectedSlot);
+    renderCalendar();
+
+    setTimeout(() => closeOverlay("form-overlay"), 2500);
+  } catch(e) {
+    console.error(e);
+    msg.style.color = "#ef9a9a";
+    msg.textContent = "Something went wrong. Please try again.";
+    btn.disabled = false;
+    btn.textContent = "Confirm Appointment";
+  }
+  showLoading(false);
+});
+
+// ─── Appointment Management (from email link) ────────────────────────────────
+let managedAppt = null;
+
+async function loadAppointmentFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const apptId = params.get("appt");
+  if (!apptId) return;
+
+  showLoading(true);
+  try {
+    const appt = await getAppointment(apptId);
+    showLoading(false);
+    if (!appt) {
+      alert("Appointment not found or already cancelled.");
+      return;
+    }
+    managedAppt = appt;
+    showManagementModal(appt);
+  } catch(e) {
+    showLoading(false);
+    console.error(e);
+  }
+}
+
+function showManagementModal(appt) {
+  const info = document.getElementById("appt-info");
+  const isCancelled = appt.status === "cancelled";
+
+  info.innerHTML = `
+    <p><strong>Date:</strong> ${appt.date}</p>
+    <p><strong>Time:</strong> ${appt.slot}</p>
+    <p><strong>Name:</strong> ${appt.name}</p>
+    <p><strong>People:</strong> ${appt.people}</p>
+    <p><strong>Phone:</strong> ${appt.phone}</p>
+    <p><strong>Email:</strong> ${appt.email}</p>
+    <p><strong>Status:</strong> ${appt.status === "active" ? "✅ Confirmed" : "❌ Cancelled"}</p>
+  `;
+
+  const actions = document.getElementById("mgmt-actions");
+  actions.innerHTML = "";
+
+  if (isCancelled) return;
+
+  const btnCancel = document.createElement("button");
+  btnCancel.className = "btn-danger";
+  btnCancel.textContent = "Cancel Appointment";
+  btnCancel.addEventListener("click", async () => {
+    if (!confirm("Are you sure you want to cancel this appointment?")) return;
+    showLoading(true);
+    try {
+      await cancelAppointment(managedAppt.id);
+      await sendMgmtUpdateEmail(managedAppt, "CANCELLED", null, null);
+      managedAppt.status = "cancelled";
+      info.querySelector("p:last-child").innerHTML = "<strong>Status:</strong> ❌ Cancelled";
+      actions.innerHTML = "<p style='color:#a5d6a7;margin-top:8px;'>Appointment cancelled. You'll receive a confirmation email shortly.</p>";
+      renderCalendar();
+    } catch(e) { alert("Error cancelling. Please try again."); console.error(e); }
+    showLoading(false);
+  });
+
+  const btnReschedule = document.createElement("button");
+  btnReschedule.className = "btn-secondary";
+  btnReschedule.textContent = "Reschedule Appointment";
+  btnReschedule.addEventListener("click", () => {
+    closeOverlay("mgmt-overlay");
+    openRescheduleModal();
+  });
+
+  actions.appendChild(btnReschedule);
+  actions.appendChild(btnCancel);
+
+  openOverlay("mgmt-overlay");
+}
+
+// ─── Reschedule Mini-Calendar ────────────────────────────────────────────────
+let reschedYear  = today.getFullYear();
+let reschedMonth = today.getMonth();
+
+function openRescheduleModal() {
+  reschedYear  = today.getFullYear();
+  reschedMonth = today.getMonth();
+  renderReschedCal();
+  openOverlay("reschedule-overlay");
+}
+
+async function renderReschedCal() {
+  document.getElementById("reschedule-month-title").textContent =
+    `${MONTH_NAMES[reschedMonth]} ${reschedYear}`;
+
+  const grid = document.getElementById("reschedule-grid");
+  grid.innerHTML = "";
+  document.getElementById("reschedule-slot-area").innerHTML = "";
+
+  const firstDay = new Date(reschedYear, reschedMonth, 1).getDay();
+  const daysInMonth = new Date(reschedYear, reschedMonth+1, 0).getDate();
+
+  showLoading(true);
+  let monthBooked = {};
+  try {
+    const { collection, query, where, getDocs } = fbm();
+    const startStr = dateKey(reschedYear, reschedMonth, 1);
+    const endStr   = dateKey(reschedYear, reschedMonth, daysInMonth);
+    const q = query(collection(idb(),"appointments"),
+      where("date",">=",startStr), where("date","<=",endStr), where("status","==","active"));
+    const snap = await getDocs(q);
+    snap.forEach(d => {
+      const data = d.data();
+      if (!monthBooked[data.date]) monthBooked[data.date] = new Set();
+      monthBooked[data.date].add(data.slot);
+    });
+  } catch(e) { console.warn(e); }
+  showLoading(false);
+
+  for (let i = 0; i < firstDay; i++) {
+    const el = document.createElement("div");
+    el.style.cssText = "min-height:44px;";
+    grid.appendChild(el);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(reschedYear, reschedMonth, d);
+    const dow = dateObj.getDay();
+    const dStr = dateKey(reschedYear, reschedMonth, d);
+    const isPast = dateObj < today;
+    const isClosed = (dow === 0 || dow === 1);
+    const cell = document.createElement("div");
+    cell.style.cssText = "background:#1a1a1a;border-radius:6px;min-height:44px;padding:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:2px solid transparent;font-size:.78rem;";
+
+    const dayN = document.createElement("div");
+    dayN.style.cssText = "font-weight:700;color:#ccc;";
+    dayN.textContent = d;
+    cell.appendChild(dayN);
+
+    if (isClosed || isPast) {
+      cell.style.opacity = ".35";
+      cell.style.cursor = "not-allowed";
+    } else {
+      const allSlots = generateSlots(dateObj) || [];
+      const booked = monthBooked[dStr] || new Set();
+      const available = allSlots.filter(s => !booked.has(s)).length;
+      const sub = document.createElement("div");
+      sub.style.cssText = "color:#90caf9;font-size:.62rem;text-align:center;";
+      sub.textContent = available > 0 ? `${available} avail` : "Full";
+      cell.appendChild(sub);
+
+      if (available > 0) {
+        cell.addEventListener("click", () => showReschedSlots(reschedYear, reschedMonth, d, monthBooked[dStr] || new Set()));
+        cell.addEventListener("mouseenter", () => { cell.style.borderColor = "#1e88e5"; });
+        cell.addEventListener("mouseleave", () => { cell.style.borderColor = "transparent"; });
+      } else {
+        cell.style.opacity = ".4"; cell.style.cursor = "not-allowed";
+      }
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function showReschedSlots(y, m, d, booked) {
+  const dateObj = new Date(y, m, d);
+  const dStr = dateKey(y, m, d);
+  const allSlots = generateSlots(dateObj) || [];
+  const area = document.getElementById("reschedule-slot-area");
+  area.innerHTML = `<p style="color:#90caf9;margin-bottom:8px;font-size:.9rem;">
+    ${dateObj.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} — pick a time:</p>`;
+  allSlots.forEach(slot => {
+    if (booked.has(slot)) return;
+    const btn = document.createElement("button");
+    btn.className = "slot-btn";
+    btn.textContent = slot;
+    btn.style.marginBottom = "6px";
+    btn.addEventListener("click", async () => {
+      if (!confirm(`Reschedule to ${dStr} at ${slot}?`)) return;
+      showLoading(true);
+      try {
+        // Check for double booking
+        const fresh = await getBookedSlots(dStr);
+        if (fresh.has(slot)) {
+          alert("That slot was just taken. Please pick another.");
+          showLoading(false);
+          return;
+        }
+        const newId = await rescheduleAppointment(managedAppt.id, dStr, slot);
+        await sendMgmtUpdateEmail(managedAppt, "RESCHEDULED", dStr, slot);
+        managedAppt = await getAppointment(newId);
+        closeOverlay("reschedule-overlay");
+        showManagementModal(managedAppt);
+        renderCalendar();
+      } catch(e) { alert("Error rescheduling. Please try again."); console.error(e); }
+      showLoading(false);
+    });
+    area.appendChild(btn);
+  });
+}
+
+document.getElementById("reschedule-nav-next").addEventListener("click", () => {
+  reschedMonth++;
+  if (reschedMonth > 11) { reschedMonth = 0; reschedYear++; }
+  renderReschedCal();
+});
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+document.getElementById("nav-next").addEventListener("click", () => {
+  viewMonth++;
+  if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  renderCalendar();
+});
+
+// ─── Overlay helpers ─────────────────────────────────────────────────────────
+function openOverlay(id) { document.getElementById(id).classList.add("active"); }
+function closeOverlay(id) { document.getElementById(id).classList.remove("active"); }
+
+document.getElementById("slot-close").addEventListener("click", () => closeOverlay("slot-overlay"));
+document.getElementById("form-close").addEventListener("click", () => closeOverlay("form-overlay"));
+document.getElementById("mgmt-close").addEventListener("click", () => closeOverlay("mgmt-overlay"));
+document.getElementById("reschedule-close").addEventListener("click", () => {
+  closeOverlay("reschedule-overlay");
+  openOverlay("mgmt-overlay");
+});
+
+// Close overlay on backdrop click
+["slot-overlay","form-overlay","mgmt-overlay","reschedule-overlay"].forEach(id => {
+  document.getElementById(id).addEventListener("click", e => {
+    if (e.target === document.getElementById(id)) closeOverlay(id);
+  });
+});
+
+// ─── Contact FAB ─────────────────────────────────────────────────────────────
+document.getElementById("contact-fab-btn").addEventListener("click", () => {
+  document.getElementById("contact-menu").classList.toggle("open");
+});
+document.addEventListener("click", e => {
+  if (!document.getElementById("contact-fab").contains(e.target)) {
+    document.getElementById("contact-menu").classList.remove("open");
+  }
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+// Wait for Firebase module to initialize
+function waitForFirebase(cb, tries=0) {
+  if (window._db && window._fbModules) { cb(); return; }
+  if (tries > 50) { console.error("Firebase did not init"); return; }
+  setTimeout(() => waitForFirebase(cb, tries+1), 100);
+}
+
+waitForFirebase(() => {
+  renderCalendar();
+  loadAppointmentFromUrl();
+});
 </script>
 </body>
 </html>
